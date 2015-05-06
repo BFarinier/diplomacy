@@ -21,6 +21,7 @@ val coastal_to_fleets : coastal province -> fleets province
 val water_to_fleets : water province -> fleets province
 
 val get_name_abbr : 'a province -> string * string
+val homeland_of : armies province -> country
 val controlled_by : armies province -> country
 val is_supply_center : armies province -> bool
 

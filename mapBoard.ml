@@ -21,6 +21,7 @@ type pt = {
   supply : bool;
   adj_armies : pt list;
   adj_fleets : pt list;
+  homeland : country;
   mutable country : country
 }
 
@@ -34,6 +35,7 @@ let coastal_to_fleets (p: coastal province) : fleets province = p
 let water_to_fleets   (p: water   province) : fleets province = p
 
 let get_name_abbr (p: 'a province) : string * string = p.name, p.abbr
+let homeland_of (p: armies province) : country = p.homeland
 let controlled_by (p: armies province) : country = p.country
 let is_supply_center (p: armies province) : bool = p.supply
 
@@ -144,6 +146,7 @@ let rec den : coastal province = {
   supply = false;
   adj_armies = [bre;spa;par];
   adj_fleets = [bre;spa;cha];
+  homeland = Neutral;
   country = Neutral }
 and bre : coastal province = {
   psort = Coastal;
@@ -152,6 +155,7 @@ and bre : coastal province = {
   supply = false;
   adj_armies = [den;spa;par];
   adj_fleets = [den;spa;cha];
+  homeland = Neutral;
   country = Neutral }
 and spa : coastal province = {
   psort = Coastal;
@@ -160,6 +164,7 @@ and spa : coastal province = {
   supply = false;
   adj_armies = [den;bre;par];
   adj_fleets = [den;bre;cha];
+  homeland = Neutral;
   country = Neutral }
 and par : inland province = {
   psort = Inland;
@@ -168,6 +173,7 @@ and par : inland province = {
   supply = false;
   adj_armies = [bre;den;spa];
   adj_fleets = [bre;den;spa;cha];
+  homeland = Neutral;
   country = Neutral }
 and cha : water province = {
   psort = Water;
@@ -176,6 +182,7 @@ and cha : water province = {
   supply = false;
   adj_armies = [den;bre;spa;par];
   adj_fleets = [den;bre;spa];
+  homeland = Neutral;
   country = Neutral }
 let boardmap : t =
   BS.empty, List.fold_left (fun bm p -> BM.add p (Obj.magic ()) bm) BM.empty [den; bre; spa; par; cha]
