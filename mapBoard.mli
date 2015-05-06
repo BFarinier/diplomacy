@@ -14,6 +14,8 @@ type fleets
 type 'a province
 
 val to_any : 'a province -> any province
+val from_any : any province ->
+  inland province option * water province option * coastal province option
 
 val inland_to_armies : inland province -> armies province
 val coastal_to_armies : coastal province -> armies province
@@ -38,12 +40,15 @@ val take_control : armies units -> unit
 
 type t
 val boardmap : t
+val next_season : t -> t
 
 val provinces : t -> any province list
 val supply_centers : t -> any province list
-val provinces_controlled_by : country -> t -> any province list
 val on_province : t -> any province -> any units
 val on_mapboard : t -> (any province * any units) list
+val controlled_by : country -> t -> any province list
+val search_by_name : string -> t -> any province
+val search_by_abbr : string -> t -> any province
 
 val is_accessible : 'a units -> 'a province -> bool
 val are_adjacent : 'a province -> 'a province -> bool

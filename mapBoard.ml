@@ -28,6 +28,12 @@ type pt = {
 type 'a province = pt
 
 let to_any (p:'a province) : any province = p
+let from_any (p: any province) :
+  inland province option  * water province option * coastal province option =
+  match p.psort with
+  | Inland -> Some p, None, None
+  | Water -> None, Some p, None
+  | Coastal -> None, None, Some p
 
 let inland_to_armies  (p: inland  province) : armies province = p
 let coastal_to_armies (p: coastal province) : armies province = p
@@ -88,7 +94,7 @@ let provinces (bs,_: t) : any province list =
 let supply_centers (bs,_: t) : any province list =
   BS.elements (BS.filter (fun p -> p.supply) bs)
 
-let provinces_controlled_by (c: country) (bs,_ : t) : any province list =
+let controlled_by (c: country) (bs,_ : t) : any province list =
   BS.elements (BS.filter (fun p -> p.country = c) bs)
 
 let on_province ((_,bm): t) (p: any province) : 'a =
@@ -101,6 +107,17 @@ let on_mapboard ((_,bm): t) : (any province * any units) list =
 let add_unit (u: any units) (bs,bm) =  bs, BM.add (stand_on u) u bm
 let remove_unit (u: any units) (bs,bm) = bs, BM.remove (stand_on u) bm
 
+let search_by_name (name: string) (bs,_: t) : any province =
+  let name = String.(lowercase @@ escaped @@ trim name) in
+  BS.filter (fun p -> (String.lowercase p.name) = name) bs
+  |> BS.elements
+  |> function | [p] -> p | _ -> raise Not_found
+
+let search_by_abbr (abbr: string) (bs,_: t) : any province =
+  let abbr = String.(lowercase @@ escaped @@ trim abbr) in
+  BS.filter (fun p -> (String.lowercase p.abbr) = abbr) bs
+  |> BS.elements
+  |> function | [p] -> p | _ -> raise Not_found
 
 
 
@@ -137,6 +154,7 @@ let create_fleets (c: country) (p: fleets province) (_,bm: t): fleets units =
   { usort = Fleets; country = c; province = p }
 
 
+let next_season (bs,bm: t) : t = (bs, BM.empty)
 
 
 let rec den : coastal province = {
