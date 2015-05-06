@@ -2,75 +2,129 @@ type country =
     Austria | England | France | Germany
   | Italy | Russia | Turkey | Neutral
 
-type any = [`Inland|`Water|`Coastal]
+type any
 
-type armies = [`Inland|`Coastal]
-type fleets = [`Water|`Coastal]
+type inland
+type water
+type coastal
 
-type 'a province = {
-  sort : 'a;
-  name : string;
-  abbr : string;
-  supply : bool;
-  adj_armies : armies province list;
-  adj_fleets : fleets province list;
-  mutable country : country
-}
+type armies
+type fleets
+
+
+module P = struct
+
+  type s = Inland | Water | Coastal
+
+  type t = {
+    sort : s;
+    name : string;
+    abbr : string;
+    supply : bool;
+    adj_armies : t list;
+    adj_fleets : t list;
+    mutable country : country
+  }
+
+  type 'a province = t
+end
+
+type 'a province = 'a P.province
+
+let to_any (p:'a province) : any province = p
+
+let inland_to_armies  (p: inland  province) : armies province = p
+let coastal_to_armies (p: coastal province) : armies province = p
+let coastal_to_fleets (p: coastal province) : fleets province = p
+let water_to_fleets   (p: water   province) : fleets province = p
+
+let controlled_by (p: any province) : country = p.P.country
+let is_supply_center (p: any province) : bool = p.P.supply
+
+
+module U = struct
+
+  type 'a t = {
+    country : country;
+    mutable province : 'a province
+  }
+
+  type _ units =
+    | Armies : armies t -> armies units 
+    | Fleets : fleets t -> fleets units
+    | Any_armies : armies t -> any units
+    | Any_fleets : fleets t -> any units
+
+  let upcast (type a) (u: a units) : any units =
+    match u with
+    | Armies u -> Any_armies u
+    | Fleets u -> Any_fleets u
+    | Any_armies _ -> u
+    | Any_fleets _ -> u
+
+  let downcast (type a) (u: a units) : armies units option * fleets units option =
+    match u with
+    | Armies _ -> Some u, None
+    | Fleets _ -> None, Some u
+    | Any_armies u -> Some (Armies u), None
+    | Any_fleets u -> None, Some (Fleets u)
+
+  let update (type a) (u : a units) (p : a province) =
+    match u with
+    | Armies u -> u.province <- p
+    | Fleets u -> u.province <- p
+    | Any_armies u -> u.province <- p
+    | Any_fleets u -> u.province <- p
+
+end
+
+type 'a units = 'a U.units
+
+let create_armies (c: country) (p: armies province) : armies units =
+  U.(Armies { country = c; province = p })
+let create_fleets (c: country) (p: fleets province) : fleets units =
+  U.(Fleets { country = c; province = p })
+
+let own_by (u: any units) : country =
+  U.(match u with
+      | Any_armies u -> u.country
+      | Any_fleets u -> u.country)
+
+let rec stand_on (type a) (u: a units) : a province =
+  U.(match u with
+      | Armies u -> u.province
+      | Fleets u -> u.province
+      | Any_armies u -> u.province
+      | Any_fleets u -> u.province)
+
 
 module BS = Set.Make(struct
     type t = any province
     let compare t1 t2 =
       compare
-        (t1.sort, t1.supply, t1.abbr, t1.name)
-        (t2.sort, t2.supply, t2.abbr, t2.name)
+        P.(t1.sort, t1.supply, t1.abbr, t1.name)
+        P.(t2.sort, t2.supply, t2.abbr, t2.name)
   end)
 
 module BM = Map.Make(struct
     type t = any province
     let compare t1 t2 =
       compare
-        (t1.sort, t1.supply, t1.abbr, t1.name)
-        (t2.sort, t2.supply, t2.abbr, t2.name)
+        P.(t1.sort, t1.supply, t1.abbr, t1.name)
+        P.(t2.sort, t2.supply, t2.abbr, t2.name)
   end)
 
 type 'a t = (BS.t * 'a BM.t)
 
-type 'a u = {
-  sort : 'a;
-  country : country;
-  mutable province : 'a province
-}
-
-type _ units =
-  | Armies : armies u -> armies units
-  | Fleets : fleets u -> fleets units
 
 let provinces (bs,_: 'a t) : any province list =
   BS.elements bs
 
 let supply_centers (bs,_: 'a t) : any province list =
-  BS.elements (BS.filter (fun p -> p.supply) bs)
+  BS.elements (BS.filter (fun p -> p.P.supply) bs)
 
 let provinces_controlled_by (c: country) (bs,_ : 'a t) : any province list =
-  BS.elements (BS.filter (fun p -> p.country = c) bs)
-
-
-let controlled_by (p: _ province) : country = p.country
-let is_supply_center (p: _ province) : bool = p.supply
-
-let unpack (type a) (u: a units) : a u =
-  match u with
-  | Armies u -> u
-  | Fleets u -> u
-
-let update (type a) (u: a units) (p: a province) : unit =
-  match u with
-  | Armies u -> u.province <- p
-  | Fleets u -> u.province <- p
-
-let own_by (type a) (u: a units) : country = (unpack u).country
-let stand_on (type a) (u: a units) : a province = (unpack u).province
-
+  BS.elements (BS.filter (fun p -> p.P.country = c) bs)
 
 let on_province ((_,bm): 'a t) (p: any province) : 'a =
   BM.find p bm
@@ -81,52 +135,72 @@ let on_mapboard ((_,bm): 'a t) : (any province * 'a) list =
 
 let add_unit (u: any units) (bs,bm) =  bs, BM.add (stand_on u) u bm
 let remove_unit (u: any units) (bs,bm) = bs, BM.remove (stand_on u) bm
-let find_unit (u: any units) (bs,bm) = bs, BM.find (stand_on u) bm
 
 
 let check_adj p1 p2 l1 l2 =
   let b = List.mem p1 l2 in
   assert (List.mem p2 l1 = b); b
 
+let are_adjacent (type a) (u: a units) (p: a province) : bool =
+  U.(match u with
+      | Armies u -> check_adj p u.province p.P.adj_armies u.province.P.adj_armies
+      | Fleets u -> check_adj p u.province p.P.adj_fleets u.province.P.adj_fleets
+      | Any_armies u -> check_adj p u.province p.P.adj_armies u.province.P.adj_armies
+      | Any_fleets u -> check_adj p u.province p.P.adj_fleets u.province.P.adj_fleets)
 
-let are_adjacent_for (type a) (u: a units) (p1: a province) (p2: a province) : bool =
-  match u with
-  | Armies _ -> check_adj p1 p2 p1.adj_armies p2.adj_armies
-  | Fleets _ -> check_adj p1 p2 p1.adj_fleets p2.adj_fleets
+let move_armies (u: armies units) (p: armies province) (b: any units t) : any units t =
+  assert (are_adjacent u p);
+  U.update u p;
+  add_unit (U.upcast u) b
 
-let move_unit (u: any units) (p: any province) (b: any units t) : any units t =
-  assert (are_adjacent_for u (stand_on u) p);
-  update u p;
-  add_unit u b
+let move_fleets (u: fleets units) (p: fleets province) (b: any units t) : any units t =
+  assert (are_adjacent u p);
+  U.update u p;
+  add_unit (U.upcast u) b
 
 
-
-let rec den : 'a. ([>`Coastal] as 'a) province = {
-  sort = `Coastal;
-  name = "Denmark";
-  abbr = "DEN";
-  supply = false;
-  adj_armies = [den;spa];
-  adj_fleets = [den;bre];
-  country = Neutral }
-and bre : 'a. ([>`Coastal] as 'a)  province = {
-  sort = `Coastal;
-  name = "Brest";
-  abbr = "BRE";
-  supply = false;
-  adj_armies = [den;spa];
-  adj_fleets = [den;spa];
-  country = Neutral }
-and spa : 'a. ([>`Coastal] as 'a)  province = {
-  sort = `Coastal;
-  name = "Spain";
-  abbr = "SPA";
-  supply = false;
-  adj_armies = [den;bre];
-  adj_fleets = [den;bre];
-  country = Neutral }
+let rec den : coastal province = P.{
+    sort = Coastal;
+    name = "Denmark";
+    abbr = "DEN";
+    supply = false;
+    adj_armies = [bre;spa;par];
+    adj_fleets = [bre;spa;cha];
+    country = Neutral }
+and bre : coastal province = P.{
+    sort = Coastal;
+    name = "Brest";
+    abbr = "BRE";
+    supply = false;
+    adj_armies = [den;spa;par];
+    adj_fleets = [den;spa;cha];
+    country = Neutral }
+and spa : coastal province = P.{
+    sort = Coastal;
+    name = "Spain";
+    abbr = "SPA";
+    supply = false;
+    adj_armies = [den;bre;par];
+    adj_fleets = [den;bre;cha];
+    country = Neutral }
+and par : inland province = P.{
+    sort = Inland;
+    name = "Paris";
+    abbr = "PAR";
+    supply = false;
+    adj_armies = [bre;den;spa];
+    adj_fleets = [bre;den;spa;cha];
+    country = Neutral }
+and cha : water province = P.{
+    sort = Water;
+    name = "Channel";
+    abbr = "CHA";
+    supply = false;
+    adj_armies = [den;bre;spa;par];
+    adj_fleets = [den;bre;spa];
+    country = Neutral }
 let boardmap : unit t =
-  BS.empty, List.fold_left (fun bm p -> BM.add p () bm) BM.empty [den; bre; spa]
+  BS.empty, List.fold_left (fun bm p -> BM.add p () bm) BM.empty [den; bre; spa; par; cha]
 
 let autria =
   Austria,
