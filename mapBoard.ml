@@ -12,7 +12,6 @@ type fleets
 
 
 
-
 type ps = Inland | Water | Coastal
 
 type pt = {
@@ -34,9 +33,9 @@ let coastal_to_armies (p: coastal province) : armies province = p
 let coastal_to_fleets (p: coastal province) : fleets province = p
 let water_to_fleets   (p: water   province) : fleets province = p
 
+let get_name_abbr (p: 'a province) : string * string = p.name, p.abbr
 let controlled_by (p: armies province) : country = p.country
 let is_supply_center (p: armies province) : bool = p.supply
-
 
 
 
@@ -56,14 +55,9 @@ let specialize (u: any units) : armies units option * fleets units option =
   | Armies -> Some u, None
   | Fleets -> None, Some u
 
-let create_armies (c: country) (p: armies province) : armies units =
-  { usort = Armies; country = c; province = p }
-let create_fleets (c: country) (p: fleets province) : fleets units =
-  { usort = Fleets; country = c; province = p }
-
-let own_by (type a) (u: a units) : country = u.country
-let rec stand_on (type a) (u: a units) : a province = u.province
-
+let own_by (u: 'a units) : country = u.country
+let stand_on (u: 'a units) : 'a province = u.province
+let take_control (u: armies units) = u.province.country <- u.country
 
 
 
@@ -98,12 +92,14 @@ let provinces_controlled_by (c: country) (bs,_ : t) : any province list =
 let on_province ((_,bm): t) (p: any province) : 'a =
   BM.find p bm
 
-let on_mapboard ((_,bm): t) : (any province * 'a) list =
+let on_mapboard ((_,bm): t) : (any province * any units) list =
   BM.bindings bm
 
 
 let add_unit (u: any units) (bs,bm) =  bs, BM.add (stand_on u) u bm
 let remove_unit (u: any units) (bs,bm) = bs, BM.remove (stand_on u) bm
+
+
 
 
 let check_adj p1 p2 l1 l2 =
@@ -119,6 +115,7 @@ let are_adjacent (p1: 'a province) (p2: 'a province) : bool =
   check_adj p1 p2 p1.adj_armies p2.adj_armies
   || check_adj p1 p2 p1.adj_fleets p2.adj_fleets
 
+
 let move_armies (u: armies units) (p: armies province) (b: t) : t =
   assert (is_accessible u p);
   u.province <- p;
@@ -128,6 +125,14 @@ let move_fleets (u: fleets units) (p: fleets province) (b: t) : t =
   assert (is_accessible u p);
   u.province <- p;
   add_unit (generalize u) b
+
+
+let create_armies (c: country) (p: armies province) (_,bm: t) : armies units =
+  assert (p.country = c && p.supply && not (BM.mem p bm));
+  { usort = Armies; country = c; province = p }
+let create_fleets (c: country) (p: fleets province) (_,bm: t): fleets units =
+  assert (p.country = c && p.supply && not (BM.mem p bm));
+  { usort = Fleets; country = c; province = p }
 
 
 
