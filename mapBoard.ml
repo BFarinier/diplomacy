@@ -19,10 +19,10 @@ type pt = {
   name : string;
   abbr : string;
   supply : bool;
-  adj_armies : pt list;
-  adj_fleets : pt list;
   homeland : country;
-  mutable country : country
+  mutable country : country;
+  mutable adj_armies : pt list;
+  mutable adj_fleets : pt list;
 }
 
 type 'a province = pt

@@ -15,6 +15,13 @@ type order =
   | FConvoy of fleets units * armies province * armies province
 
 
+
+let is_convoying = function
+  | AMove (u, p) -> is_accessible u p
+  | _ -> false
+
+
+
 let error_province = "incompatible province type"
 let error_units = "incompatible unit type"
 let error_number = "wrong number of argument"
@@ -57,7 +64,18 @@ let list3 t = function
   | _ -> raise (Invalid_argument error_number)
 
 
-let make (u: [< utag]) (o: [< otag]) (t: t) (lst: string list) =
+let tags = function
+  | AHold _ -> `Armies, `Hold
+  | AMove _ -> `Armies, `Move
+  | ASupportD _ -> `Armies, `SupportD
+  | ASupportA _ -> `Armies, `SupportA
+  | FHold _ -> `Fleets, `Hold
+  | FMove _ -> `Fleets, `Move
+  | FSupportD _ -> `Fleets, `SupportD
+  | FSupportA _ -> `Fleets, `SupportA
+  | FConvoy _ -> `Fleets, `Convoy
+
+let make (t: t) (u: [< utag]) (o: [< otag]) (lst: string list) =
   match u with
   | `Armies -> begin
       match o with
