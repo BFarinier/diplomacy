@@ -1,5 +1,6 @@
 (* http://www.floc.net/dpjudge/?page=Algorithm *)
 
+open Prelude
 open MapBoard
 open Order
 
@@ -14,18 +15,38 @@ type data_units = {
   mutable count : int;
 }
 
+let order du = du.order
+let mark du = du.mark
+let count du = du.count
+let set_mark du m = du.mark <- m
+let set_count du c = du.count <- c
+
 type data_province = {
   province : any province;
   mutable combats : order list;
 }
 
-type data_convoy = data_units list
+let province dp = dp.province
+let combats dp = dp.combats
+let set_combats dp c = dp.combats <- c
 
-let set_mark u m = u.mark <- m
-let set_count u c = u.count <- c
+type data_convoy = data_units list
 
 module SU = Set.Make(struct type t = data_units let compare = compare end)
 module SP = Set.Make(struct type t = data_province let compare = compare end)
+
+let exists_order f su = SU.exists (fun du -> du.mark = Nothing && f du.order) su
+let filter_order f su = SU.filter (fun du -> du.mark = Nothing && f du.order) su
+let partition_order f su = SU.partition (fun du -> du.mark = Nothing && f du.order) su
+
+let ptof u = match from_any (to_any u) with
+  | None, Some u, None -> water_to_fleets u
+  | None, None, Some u -> coastal_to_fleets u
+  | _ -> assert false
+let ptoa u = match from_any (to_any u) with
+  | Some u, None, None -> inland_to_armies u
+  | None, None, Some u -> coastal_to_armies u
+  | _ -> assert false
 
 (* -------------------------------------------------------------------------- *)
 
@@ -38,87 +59,70 @@ module Step1 = struct
   let update_visited p p' visited not_visited =
     p', p::visited, List.filter (fun p' -> not (p = p')) not_visited
 
-  let rec next_fleets
-      (visited: fleets province list)
-      (not_visited: fleets province list)
-      (p : fleets province)
-      (acc: (fleets province * fleets province list * fleets province list) list)
-    = function
-      | [] -> acc
-      | p'::l ->
+  let next_fleets visited not_visited p =
+    List.fold_left (fun acc p' ->
         if are_adjacent p p' && check_visited p' visited not_visited
-        then next_fleets visited not_visited p ((update_visited p p' visited not_visited)::acc) l
-        else next_fleets visited not_visited p acc l
+        then (update_visited p p' visited not_visited)::acc
+        else acc) [] not_visited
 
-  let rec exists_chain
-      (source: fleets province)
-      (target: fleets province)
-      (visited: fleets province list)
-      (not_visited: fleets province list) =
+  let rec exists_chain source target visited not_visited =
     (are_adjacent source target)
-    || (not (not_visited = [])
-        && let nexts = next_fleets visited not_visited source [] not_visited in
-        List.exists (fun (s, visited, not_visited) -> exists_chain s target visited not_visited) nexts)
+    || (not_visited <> []
+        && List.exists
+          (fun (s, visited, not_visited) -> exists_chain s target visited not_visited)
+          (next_fleets visited not_visited source))
 
-  let check_convoy
-      (source: armies province)
-      (target: armies province)
-      (conveyors: fleets province list) =
-    let source =
-      match from_any (to_any source) with
-      | None, Some s, None -> water_to_fleets s
-      | None, None, Some s -> coastal_to_fleets s
-      | _ -> assert false
+  let check_convoy source target conveyors =
+    let b =
+      List.map
+        (order %> function FConvoy (u,_,_) -> ptof (stand_on u) | _ -> assert false)
+        (SU.elements conveyors)
+      |> exists_chain (ptof source) (ptof target) []
     in
-    let target =
-      match from_any (to_any target) with
-      | None, Some t, None -> water_to_fleets t
-      | None, None, Some t -> coastal_to_fleets t
-      | _ -> assert false
-    in
-    exists_chain source target [] conveyors
+    if not b then SU.iter (fun du -> set_mark du Void) conveyors; b
 
-  let rec split_convoy_order
-      (acc: (armies province * armies province * SU.t) list)
-      (su: SU.t) =
+
+
+  let rec split_convoy_order acc su =
     if SU.is_empty su then acc
-    else match (SU.choose su).order with
+    else match order (SU.choose su) with
       | FConvoy (_,s,t) ->
-        let (su1, su2) = SU.partition (fun u -> match u.order with FConvoy (_,s',t') -> s = s' && t = t' | _ -> false) su in
+        let (su1, su2) = partition_order (function FConvoy (_,s',t') -> s = s' && t = t' | _ -> false) su in
         split_convoy_order ((s,t,su1)::acc) su2
       | _ -> assert false
 
-
-  let get_convoy_orders (su: SU.t) =
+  let get_convoy_orders su =
     let fleets =
-      SU.filter (fun u -> match u.order with FConvoy _ -> true | _ -> false ) su
-      |> split_convoy_order []
-    in
-    let armies = SU.filter (fun u -> is_convoying u.order) su in
+      filter_order (function FConvoy _ -> true | _ -> false ) su
+      |> split_convoy_order [] in
+    let armies = filter_order is_convoying su in
     fleets, armies
+
+
 
   let check_fleets (fleets, armies) =
     List.iter
       (fun (s,t,su) ->
-         if not (SU.exists (fun du -> match du.order with AMove (u,p) -> (stand_on u) = s && p = t | _ -> assert false) su)
-         then SU.iter (fun du -> set_mark du Void) su)
+         if not (exists_order (function AMove (u,p) -> (stand_on u) = s && p = t | _ -> assert false) su)
+         then SU.iter (flip set_mark Void) su)
       fleets
 
   let check_armies (fleets, armies) dc =
     SU.fold
-      (fun du dc -> match du.order with
-           AMove (u,p) -> begin
-             if List.exists (fun (s,t,_) -> (stand_on u) = s && p = t) fleets
-             then du::dc
-             else (set_mark du NoConvoy; dc)
-           end
+      (fun du dc -> match order du with
+         | AMove (u,p) ->
+           if List.exists (fun (s,t,su) -> (stand_on u) = s && p = t && check_convoy s t su) fleets
+           then du::dc
+           else (set_mark du NoConvoy; dc)
          | _ -> assert false)
       armies dc
 
+
+
   let mark_all_invalid_convoy_orders su =
     let orders = get_convoy_orders su in
-    check_fleets orders;
-    check_armies orders []
+    let dc = check_armies orders [] in
+    check_fleets orders; dc
 
 end
 
