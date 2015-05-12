@@ -5,7 +5,7 @@ open MapBoard
 open Order
 
 type mark =
-    Nothing | Void  | NoConvoy
+    Clear | Stuck
   | ConvoyEndangered | ConvoyUnderAttack
   | Bounce | Cut | Dislodged
 
@@ -18,8 +18,25 @@ type data_units = {
 let order du = du.order
 let mark du = du.mark
 let count du = du.count
-let set_mark du m = du.mark <- m
-let set_count du c = du.count <- c
+
+let clear du = du.mark <- Clear
+let stuck du = du.mark <- Stuck
+let endangered du = du.mark <- ConvoyEndangered
+let underattack du = du.mark <- ConvoyUnderAttack
+let bounce du = du.mark <- Bounce
+let cut du = du.mark <- Cut
+let dislodged du = du.mark <- Dislodged
+
+let is_clear du = du.mark = Clear
+let is_stuck du = du.mark = Stuck
+let is_endangered du = du.mark = ConvoyEndangered
+let is_underattack du = du.mark = ConvoyUnderAttack
+let is_bounce du = du.mark = Bounce
+let is_cut du = du.mark = Cut
+let is_dislodged du = du.mark = Dislodged
+
+let incr du = du.count <- succ du.count
+let decr du = du.count <- pred du.count
 
 type data_province = {
   province : any province;
@@ -35,9 +52,9 @@ type data_convoy = data_units list
 module SU = Set.Make(struct type t = data_units let compare = compare end)
 module SP = Set.Make(struct type t = data_province let compare = compare end)
 
-let exists_order f su = SU.exists (fun du -> du.mark = Nothing && f du.order) su
-let filter_order f su = SU.filter (fun du -> du.mark = Nothing && f du.order) su
-let partition_order f su = SU.partition (fun du -> du.mark = Nothing && f du.order) su
+let exists_order f su = SU.exists (fun du -> is_clear du && f du.order) su
+let filter_order f su = SU.filter (fun du -> is_clear du && f du.order) su
+let partition_order f su = SU.partition (fun du -> is_clear du && f du.order) su
 
 let ptof u = match from_any (to_any u) with
   | None, Some u, None -> water_to_fleets u
@@ -79,7 +96,7 @@ module Step1 = struct
         (SU.elements conveyors)
       |> exists_chain (ptof source) (ptof target) []
     in
-    if not b then SU.iter (fun du -> set_mark du Void) conveyors; b
+    if not b then SU.iter stuck conveyors; b
 
 
 
@@ -103,16 +120,16 @@ module Step1 = struct
     List.iter
       (fun (s,t,su) ->
          if not (exists_order (amove %> fun (u,p) -> (stand_on u) = s && p = t) su)
-         then SU.iter (flip set_mark Void) su)
+         then SU.iter stuck su)
       fleets
 
   let check_armies (fleets, armies) =
     SU.fold
       (fun du dc ->
-        let (u,p) = amove (order du) in
-        if List.exists (fun (s,t,su) -> (stand_on u) = s && p = t && check_convoy s t su) fleets
-        then du::dc
-        else (set_mark du NoConvoy; dc))
+         let (u,p) = amove (order du) in
+         if List.exists (fun (s,t,su) -> (stand_on u) = s && p = t && check_convoy s t su) fleets
+         then du::dc
+         else (stuck du; dc))
       armies []
 
 
