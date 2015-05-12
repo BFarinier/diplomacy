@@ -14,39 +14,62 @@ type order =
   | FSupportA of fleets units * fleets province * fleets province
   | FConvoy of fleets units * armies province * armies province
 
-
+let error_province = Invalid_argument "incompatible province type"
+let error_units = Invalid_argument "incompatible unit type"
+let error_number = Invalid_argument "wrong number of argument"
+let error_order = Invalid_argument "order mismatch"
 
 let is_convoying = function
-  | AMove (u, p) -> is_accessible u p
+  | AMove (u, p) -> not (is_accessible u p)
   | _ -> false
 
+let units = function
+  | AHold a | AMove (a,_) | ASupportD (a,_)
+  | ASupportA (a,_,_) -> generalize a
+  | FHold f | FMove (f,_) |FSupportD (f,_)
+  | FSupportA (f,_,_) | FConvoy (f,_,_) -> generalize f
 
+let ahold = function AHold a -> a | _ -> raise error_order
+let amove = function AMove (a,p) -> (a,p) | _ -> raise error_order
+let asupportd = function ASupportD (a,p) -> (a,p) | _ -> raise error_order
+let asupporta = function ASupportA (a,p1,p2) -> (a,p1,p2) | _ -> raise error_order
+let fhold = function FHold f -> f | _ -> raise error_order
+let fmove = function FMove (f,p) -> (f,p) | _ -> raise error_order
+let fsupportd = function FSupportD (f,p) -> (f,p) | _ -> raise error_order
+let fsupporta = function FSupportA (f,p1,p2) -> (f,p1,p2) | _ -> raise error_order
+let fconvoy = function FConvoy (f,p1,p2) -> (f,p1,p2) | _ -> raise error_order
 
-let error_province = "incompatible province type"
-let error_units = "incompatible unit type"
-let error_number = "wrong number of argument"
+let is_ahold = function AHold _ -> true | _ -> false
+let is_amove = function AMove _ -> true | _ -> false
+let is_asupportd = function ASupportD _ -> true | _ -> false
+let is_asupporta = function ASupportA _ -> true | _ -> false
+let is_fhold = function FHold _ -> true | _ -> false
+let is_fmove = function FMove _ -> true | _ -> false
+let is_fsupportd = function FSupportD _ -> true | _ -> false
+let is_fsupporta = function FSupportA _ -> true | _ -> false
+let is_fconvoy = function FConvoy _ -> true | _ -> false
 
 
 let utoa (u: any units) : armies units =
   match specialize u with
   | Some u, None -> u
-  | _ -> raise (Invalid_argument error_units)
+  | _ -> raise error_units
 let utof (u: any units) : fleets units =
   match specialize u with
   | None, Some u -> u
-  | _ -> raise (Invalid_argument error_units)
+  | _ -> raise error_units
 
 let ptoa (p: any province) : armies province =
   match from_any p with
   | Some p, None, None -> inland_to_armies p
   | None, None, Some p -> coastal_to_armies p
-  | _ -> raise (Invalid_argument error_province)
+  | _ -> raise error_province
 
 let ptof (p: any province) : fleets province =
   match from_any p with
   | None, Some p, None -> water_to_fleets p
   | None, None, Some p -> coastal_to_fleets p
-  | _ -> raise (Invalid_argument error_province)
+  | _ -> raise error_province
 
 
 let search (str: string) (t: t) =
@@ -55,13 +78,13 @@ let search (str: string) (t: t) =
 
 let list1 (t: t) = function
     [a] -> search a t
-  | _ -> raise (Invalid_argument error_number)
+  | _ -> raise error_number
 let list2 t = function
     [a;b] -> (search a t), (search b t)
-  | _ -> raise (Invalid_argument error_number)
+  | _ -> raise error_number
 let list3 t = function
     [a;b;c] -> (search a t), (search b t), (search c t)
-  | _ -> raise (Invalid_argument error_number)
+  | _ -> raise error_number
 
 
 let tags = function
@@ -91,7 +114,7 @@ let make (t: t) (u: [< utag]) (o: [< otag]) (lst: string list) =
       | `SupportA ->
         let (p1,p2,p3) = list3 t lst in
         ASupportA (utoa (on_province t p1), ptoa p2, ptoa p3)
-      | `Convoy -> raise (Invalid_argument error_units)
+      | `Convoy -> raise error_units
     end
   | `Fleets -> begin
       match o with

@@ -75,7 +75,7 @@ module Step1 = struct
   let check_convoy source target conveyors =
     let b =
       List.map
-        (order %> function FConvoy (u,_,_) -> ptof (stand_on u) | _ -> assert false)
+        (order %> fconvoy %> fun (u,_,_) -> ptof (stand_on u))
         (SU.elements conveyors)
       |> exists_chain (ptof source) (ptof target) []
     in
@@ -85,15 +85,14 @@ module Step1 = struct
 
   let rec split_convoy_order acc su =
     if SU.is_empty su then acc
-    else match order (SU.choose su) with
-      | FConvoy (_,s,t) ->
-        let (su1, su2) = partition_order (function FConvoy (_,s',t') -> s = s' && t = t' | _ -> false) su in
-        split_convoy_order ((s,t,su1)::acc) su2
-      | _ -> assert false
+    else
+      let (_,s,t) = fconvoy (order (SU.choose su)) in
+      let (su1,su2) = partition_order (fconvoy %> fun (_,s',t') -> s = s' && t = t') su in
+      split_convoy_order ((s,t,su1)::acc) su2
 
   let get_convoy_orders su =
     let fleets =
-      filter_order (function FConvoy _ -> true | _ -> false ) su
+      filter_order is_fconvoy su
       |> split_convoy_order [] in
     let armies = filter_order is_convoying su in
     fleets, armies
@@ -103,25 +102,24 @@ module Step1 = struct
   let check_fleets (fleets, armies) =
     List.iter
       (fun (s,t,su) ->
-         if not (exists_order (function AMove (u,p) -> (stand_on u) = s && p = t | _ -> assert false) su)
+         if not (exists_order (amove %> fun (u,p) -> (stand_on u) = s && p = t) su)
          then SU.iter (flip set_mark Void) su)
       fleets
 
-  let check_armies (fleets, armies) dc =
+  let check_armies (fleets, armies) =
     SU.fold
-      (fun du dc -> match order du with
-         | AMove (u,p) ->
-           if List.exists (fun (s,t,su) -> (stand_on u) = s && p = t && check_convoy s t su) fleets
-           then du::dc
-           else (set_mark du NoConvoy; dc)
-         | _ -> assert false)
-      armies dc
+      (fun du dc ->
+        let (u,p) = amove (order du) in
+        if List.exists (fun (s,t,su) -> (stand_on u) = s && p = t && check_convoy s t su) fleets
+        then du::dc
+        else (set_mark du NoConvoy; dc))
+      armies []
 
 
 
   let mark_all_invalid_convoy_orders su =
     let orders = get_convoy_orders su in
-    let dc = check_armies orders [] in
+    let dc = check_armies orders in
     check_fleets orders; dc
 
 end
