@@ -87,6 +87,12 @@ let list3 t = function
   | _ -> raise error_number
 
 
+let on_province t p =
+  match on_province t p with
+  | Some u -> u
+  | None -> raise error_order
+
+
 let tags = function
   | AHold _ -> `Armies, `Hold
   | AMove _ -> `Armies, `Move

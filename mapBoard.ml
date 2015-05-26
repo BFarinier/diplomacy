@@ -97,8 +97,8 @@ let supply_centers (bs,_: t) : any province list =
 let controlled_by (c: country) (bs,_ : t) : any province list =
   BS.elements (BS.filter (fun p -> p.country = c) bs)
 
-let on_province ((_,bm): t) (p: any province) : 'a =
-  BM.find p bm
+let on_province ((_,bm): t) (p: any province) : any units option =
+  try Some (BM.find p bm) with Not_found -> None
 
 let on_mapboard ((_,bm): t) : (any province * any units) list =
   BM.bindings bm

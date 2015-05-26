@@ -49,8 +49,14 @@ let set_combats dp c = dp.combats <- c
 
 type data_convoy = data_units list
 
-module SU = Set.Make(struct type t = data_units let compare = compare end)
-module SP = Set.Make(struct type t = data_province let compare = compare end)
+module SU = Set.Make(struct
+    type t = data_units
+    let compare d1 d2 = compare d1.order d2.order
+  end)
+module SP = Set.Make(struct
+    type t = data_province
+    let compare p1 p2 = compare p1.province p2.province
+  end)
 
 let exists_order f su = SU.exists (fun du -> is_clear du && f du.order) su
 let filter_order f su = SU.filter (fun du -> is_clear du && f du.order) su
@@ -145,3 +151,51 @@ let mark_all_invalid_convoy_orders (su: SU.t) : data_convoy =
   Step1.mark_all_invalid_convoy_orders su
 
 (* -------------------------------------------------------------------------- *)
+
+module Step2 = struct
+
+  let extract_orders f g su =
+    List.map (order %> f) (SU.elements (filter_order g su))
+
+  let extract_moves su =
+    (extract_orders amove is_amove su
+     |> List.map (fun (u,p) -> generalize u, to_any p))
+    @ (extract_orders fmove is_fmove su
+       |> List.map (fun (u,p) -> generalize u, to_any p))
+
+  let exists_attack u p1 p2 t su =
+    match on_province t p2 with
+    | None -> false
+    | Some u ->
+      extract_moves su
+      |> List.exists (fun (u',p') -> stand_on u = p1 && p' = p2)
+
+  let valid_supportd t (u,p) =
+    is_accessible u p && on_province t p <> None
+
+  let valid_supporta t (u,p1,p2) su =
+    is_accessible u p1 && is_accessible u p2
+    && on_province t p1 <> None
+    && exists_attack u p1 p2 t su
+
+  let check_supports f o =
+    if f o then incr o else stuck o
+
+
+  let extract_orders f g su =
+    List.map (order %> f) (SU.elements (filter_order g su))
+
+  let get_support_orders su =
+    extract_orders asupportd is_asupportd su,
+    extract_orders asupporta is_asupporta su,
+    extract_orders fsupportd is_fsupportd su,
+    extract_orders fsupporta is_fsupporta su
+(*
+  let mark_all_invalid_support_orders t su =
+    let (ad,aa,fd,fa) = get_support_orders su in
+    check_supports (valid_supportd t) ad;
+    check_supports (valid_supporta t su) aa;
+    check_supports (valid_supportd t) fd;
+    check_supports (valid_supporta t su) fa
+*)
+end

@@ -44,7 +44,7 @@ val next_season : t -> t
 
 val provinces : t -> any province list
 val supply_centers : t -> any province list
-val on_province : t -> any province -> any units
+val on_province : t -> any province -> any units option
 val on_mapboard : t -> (any province * any units) list
 val controlled_by : country -> t -> any province list
 val search_by_name : string -> t -> any province
