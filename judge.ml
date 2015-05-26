@@ -170,32 +170,38 @@ module Step2 = struct
       extract_moves su
       |> List.exists (fun (u',p') -> stand_on u = p1 && p' = p2)
 
+  let valid_supporta t su (u,p1,p2) =
+    (match on_province t (to_any p2) with
+     | None -> false
+     | Some u' -> own_by u <> own_by u')
+    && is_accessible u p2
+    && on_province t (to_any p1) <> None
+    && exists_attack u (to_any p1) (to_any p2) t su
+
   let valid_supportd t (u,p) =
-    is_accessible u p && on_province t p <> None
+    is_accessible u p && on_province t (to_any p) <> None
 
-  let valid_supporta t (u,p1,p2) su =
-    is_accessible u p1 && is_accessible u p2
-    && on_province t p1 <> None
-    && exists_attack u p1 p2 t su
-
-  let check_supports f o =
-    if f o then incr o else stuck o
+  let check_supports f (o,so) =
+    if f so then incr o else stuck o
 
 
   let extract_orders f g su =
-    List.map (order %> f) (SU.elements (filter_order g su))
+    List.map (fun o -> o, f (order o)) (SU.elements (filter_order g su))
 
   let get_support_orders su =
     extract_orders asupportd is_asupportd su,
     extract_orders asupporta is_asupporta su,
     extract_orders fsupportd is_fsupportd su,
     extract_orders fsupporta is_fsupporta su
-(*
+
   let mark_all_invalid_support_orders t su =
     let (ad,aa,fd,fa) = get_support_orders su in
-    check_supports (valid_supportd t) ad;
-    check_supports (valid_supporta t su) aa;
-    check_supports (valid_supportd t) fd;
-    check_supports (valid_supporta t su) fa
-*)
+    List.iter (check_supports (valid_supportd t)) ad;
+    List.iter (check_supports (valid_supporta t su)) aa;
+    List.iter (check_supports (valid_supportd t)) fd;
+    List.iter (check_supports (valid_supporta t su)) fa
+
 end
+
+let mark_all_invalid_support_orders (t: MapBoard.t) (su: SU.t) : unit =
+  Step2.mark_all_invalid_support_orders t su
