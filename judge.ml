@@ -13,11 +13,13 @@ type data_units = {
   order : order;
   mutable mark : mark;
   mutable count : int;
+  mutable nohelp : any units list;
 }
 
 let order du = du.order
 let mark du = du.mark
 let count du = du.count
+let nohelp du = du.nohelp
 
 let clear du = du.mark <- Clear
 let stuck du = du.mark <- Stuck
@@ -35,6 +37,7 @@ let is_bounce du = du.mark = Bounce
 let is_cut du = du.mark = Cut
 let is_dislodged du = du.mark = Dislodged
 
+let add_nohelp du u = du.nohelp <- u :: du.nohelp
 let incr du = du.count <- succ du.count
 let decr du = du.count <- pred du.count
 
@@ -163,26 +166,27 @@ module Step2 = struct
     @ (extract_orders fmove is_fmove su
        |> List.map (fun (u,p) -> generalize u, to_any p))
 
-  let exists_attack u p1 p2 t su =
+  let exists_attack u p1 p2 o t su =
+    if (match on_province t (to_any p2) with
+        | None -> false
+        | Some u' -> own_by u = own_by u')
+    then add_nohelp o (generalize u);
     match on_province t p2 with
     | None -> false
     | Some u ->
       extract_moves su
-      |> List.exists (fun (u',p') -> stand_on u = p1 && p' = p2)
+      |> List.exists (fun (u',p') -> u = u' && p' = p2)
 
-  let valid_supporta t su (u,p1,p2) =
-    (match on_province t (to_any p2) with
-     | None -> false
-     | Some u' -> own_by u <> own_by u')
-    && is_accessible u p2
+  let valid_supporta t su o (u,p1,p2) =
+    is_accessible u p2
     && on_province t (to_any p1) <> None
-    && exists_attack u (to_any p1) (to_any p2) t su
+    && exists_attack u (to_any p1) (to_any p2) o t su
 
-  let valid_supportd t (u,p) =
+  let valid_supportd t o (u,p) =
     is_accessible u p && on_province t (to_any p) <> None
 
   let check_supports f (o,so) =
-    if f so then incr o else stuck o
+    if f o so then incr o else stuck o
 
 
   let extract_orders f g su =
