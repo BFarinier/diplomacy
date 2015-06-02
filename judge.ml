@@ -41,14 +41,26 @@ struct
   }
 
 
-  let create (l: 'a list) : 'a t =
+  let create (type a) (l: a list) : a t =
     let n = List.length l in
+    let module M = Map.Make
+        (struct
+          type t = a
+          let compare = compare
+        end)
+    in
+    let m =
+      let i = ref 0 in
+      List.fold_left
+        (fun acc x -> M.add x (incr i; !i) acc)
+        M.empty l
+    in
     {
       resolution = Array.make n Fails;
       state = Array.make n Unresolved;
       depend = Array.make n (Obj.magic ());
       length = 0;
-      get = fun x -> Obj.magic x
+      get = fun x -> M.find x m
     }
 
 
