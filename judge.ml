@@ -37,37 +37,8 @@ struct
     state : state array;
     depend : 'a array;
     mutable length : int;
+    get : 'a -> int;
   }
-
-  let get : 'a -> int = fun x -> Obj.magic x
-
-  let set_resolution r x t =
-    t.resolution.(get x) <- r; t
-  let fails x t =
-    set_resolution Fails x t
-  let succeeds x t =
-    set_resolution Succeeds x t
-
-  let set_state r x t =
-    t.state.(get x) <- r; t
-  let unresolved x t =
-    set_state Unresolved x t
-  let guessing x t =
-    set_state Guessing x t
-  let resolved x t=
-    set_state Resolved x t
-
-  let result x t = t.resolution.(get x)
-  let state x t = t.state.(get x)
-  let length t = t.length
-
-  let push t n =
-    t.depend.(t.length) <- n;
-    t.length <- t.length + 1
-
-  let pop t =
-    t.length <- t.length - 1;
-    t.depend.(t.length)
 
 
   let create (l: 'a list) : 'a t =
@@ -77,7 +48,38 @@ struct
       state = Array.make n Unresolved;
       depend = Array.make n (Obj.magic ());
       length = 0;
+      get = fun x -> Obj.magic x
     }
+
+
+  let push t x =
+    t.depend.(t.length) <- x;
+    t.length <- t.length + 1
+
+  let pop t =
+    t.length <- t.length - 1;
+    t.depend.(t.length)
+
+
+  let set_resolution r x t =
+    t.resolution.(t.get x) <- r; t
+  let fails x t =
+    set_resolution Fails x t
+  let succeeds x t =
+    set_resolution Succeeds x t
+
+  let set_state r x t =
+    t.state.(t.get x) <- r; t
+  let unresolved x t =
+    set_state Unresolved x t
+  let guessing x t =
+    set_state Guessing x t
+  let resolved x t=
+    set_state Resolved x t
+
+  let result x t = t.resolution.(t.get x)
+  let state x t = t.state.(t.get x)
+  let length t = t.length
 
 
   let depend x t =
@@ -87,7 +89,7 @@ struct
       else
         List.rev acc
     in
-    let n = get x in
+    let n = t.get x in
     if n < 0 then [], t else aux n [], t
 
   let solved x t =
@@ -97,7 +99,7 @@ struct
         let t = resolved x t in
         aux n t
       else t
-    in aux (get x) t
+    in aux (t.get x) t
 
   let unsolved x t =
     let rec aux n t =
@@ -106,15 +108,15 @@ struct
         let t = unresolved x t in
         aux n t
       else t
-    in aux (get x) t
+    in aux (t.get x) t
 
 
   let rec resolve adjudicate backup t nr =
-    if t.state.(get nr) = Resolved
+    if t.state.(t.get nr) = Resolved
     then begin
-      t.resolution.(get nr)
+      t.resolution.(t.get nr)
     end
-    else if t.state.(get nr) = Guessing
+    else if t.state.(t.get nr) = Guessing
     then begin
       let res = ref false in
       for i = 0 to t.length - 1 do
@@ -122,18 +124,18 @@ struct
       done;
       if not (!res) then
         push t nr;
-      t.resolution.(get nr)
+      t.resolution.(t.get nr)
     end
     else begin
       let old_length = t.length in
-      t.resolution.(get nr) <- Fails;
-      t.state.(get nr) <- Guessing;
+      t.resolution.(t.get nr) <- Fails;
+      t.state.(t.get nr) <- Guessing;
       let first = adjudicate t nr in
       if (t.length = old_length)
       then begin
-        if t.state.(get nr) <> Resolved then
-          (t.resolution.(get nr) <- first;
-           t.state.(get nr) <- Resolved);
+        if t.state.(t.get nr) <> Resolved then
+          (t.resolution.(t.get nr) <- first;
+           t.state.(t.get nr) <- Resolved);
         first
       end
       else if t.depend.(old_length) <> nr
@@ -143,14 +145,14 @@ struct
       end
       else begin
         let t = unsolved t.depend.(old_length) t in
-        t.resolution.(get nr) <- Succeeds;
-        t.state.(get nr) <- Guessing;
+        t.resolution.(t.get nr) <- Succeeds;
+        t.state.(t.get nr) <- Guessing;
         let second = adjudicate t nr in
         if first = second
         then begin
           let t = unsolved t.depend.(old_length) t in
-          t.resolution.(get nr) <- first;
-          t.state.(get nr) <- Resolved;
+          t.resolution.(t.get nr) <- first;
+          t.state.(t.get nr) <- Resolved;
           first
         end 
         else begin
